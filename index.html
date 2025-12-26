@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>라마의 대모험: 이모지 에디션</title>
+    <title>라마의 대모험: 클래식 밸런스</title>
     <style>
         :root { --bg: #2c3e50; --wall: #34495e; --llama: #3498db; --alpaca: #e74c3c; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; touch-action: none; display: flex; flex-direction: column; align-items: center; }
@@ -12,12 +12,13 @@
         #ui { display: flex; flex-direction: column; align-items: center; gap: 5px; margin: 5px 0; width: 100%; }
         .stats-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
         .stat { background: rgba(0,0,0,0.3); padding: 5px 12px; border-radius: 15px; font-size: 0.8rem; }
+        #activeEffects { display: flex; gap: 5px; min-height: 30px; margin-top: 5px; }
+        .effect-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; display: flex; align-items: center; gap: 4px; }
         #controls { display: grid; grid-template-columns: repeat(3, 65px); gap: 5px; margin-top: 5px; }
         .btn { width: 65px; height: 65px; background: #95a5a6; border: none; color: white; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px #7f8c8d; }
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; text-align: center; padding: 15px; box-sizing: border-box; }
         .mode-btn { width: 300px; padding: 12px; margin: 4px; border: none; border-radius: 10px; color: white; font-weight: bold; cursor: pointer; text-align: left; position: relative; }
         .mode-btn span { display: block; font-size: 0.7rem; font-weight: normal; opacity: 0.8; margin-top: 2px; }
-        .mode-emoji { font-size: 1.4rem; margin-right: 8px; vertical-align: middle; }
         .best-record { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); font-size: 0.75rem; background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 10px; }
         .restart { padding: 15px 40px; font-size: 1.2rem; background: #2ecc71; border: none; color: white; border-radius: 30px; margin-top: 20px; font-weight: bold; cursor: pointer; }
     </style>
@@ -29,7 +30,7 @@
     <div id="modeButtons"></div>
 </div>
 
-<div id="header">🦙 <span id="modeHeaderEmoji">📖</span> <span id="modeTitle">-</span></div>
+<div id="header">🦙 <span id="modeHeaderEmoji">📖</span> <span id="modeTitle">-</span> | 🚩 RD <span id="roundNum">1</span></div>
 <div id="ui">
     <div class="stats-row">
         <div class="stat">🔑 <span id="keys">0</span> / <span id="targetKeys">0</span></div>
@@ -37,6 +38,7 @@
         <div class="stat">⏱️ <span id="gameTimer">0.0</span>s</div>
         <div id="secretTimerUI" class="stat" style="display:none; background: #e74c3c;">🤫 <span id="secretTimerDisplay">60</span></div>
     </div>
+    <div id="activeEffects"></div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -56,14 +58,14 @@
 
 <div id="finalScreen" class="overlay" style="display:none;">
     <h1 style="color: gold; font-size: 2.5rem;">HAPPY ENDING ✨</h1>
-    <p>탈출 성공! 당신의 기록: <span id="finalTimeDisplay">0</span>초</p>
+    <p>탈출 성공! 기록: <span id="finalTimeDisplay">0</span>초</p>
     <div id="newRecordMsg" style="color: #2ecc71; font-weight: bold; display: none;">뉴 레코드! 🏆</div>
     <button class="restart" onclick="location.reload()">처음으로</button>
 </div>
 
 <div id="hiddenEndingScreen" class="overlay" style="background: black; display:none;">
     <h1 style="color: red; font-size: 3rem;">💥 BOOM!!! 💥</h1>
-    <p>랄파카 폭발! 진정한 챔피언!</p>
+    <p>랄파카가 폭발했습니다! 최강의 라마 인증.</p>
     <button class="restart" onclick="location.reload()">처음으로</button>
 </div>
 
@@ -72,7 +74,7 @@
     const ctx = canvas.getContext('2d');
     
     let gameMode = 'story', round = 1, maze = [], cols, rows, tileSize;
-    let player = { x: 1, y: 1, keys: 0, lives: 3, speed: 1, invincible: false, hidden: false, targetKeys: 0 };
+    let player = { x: 1, y: 1, keys: 0, lives: 3, speed: 1, hidden: false, targetKeys: 0 };
     let enemies = []; 
     let isRunning = false, secretTimer = 0, secretNoteSpawned = false;
     let isAlpacaRound = false, isFinalChase = false, chaseCanMove = false;
@@ -81,11 +83,11 @@
 
     const modes = [
         { id: 'story', name: '스토리', emoji: '📖', color: '#3498db', desc: '일반적인 모험' },
-        { id: 'speed', name: '스피드', emoji: '⚡', color: '#e67e22', desc: '전체 2배속' },
+        { id: 'speed', name: '스피드', emoji: '⚡', color: '#e67e22', desc: '2배 빠른 전개' },
         { id: 'beggar', name: '거지', emoji: '🍞', color: '#7f8c8d', desc: '부스터 없음' },
-        { id: 'revenge', name: '복수', emoji: '👺', color: '#c0392b', desc: '랄파카 무리 추격' },
+        { id: 'revenge', name: '복수', emoji: '👺', color: '#c0392b', desc: '더 빠른 추격' },
         { id: 'pacman', name: '팩맨', emoji: '🟡', color: '#f1c40f', desc: '모든 열쇠 수집' },
-        { id: 'dark', name: '어둠', emoji: '🌑', color: '#2c3e50', desc: '제한된 시야' }
+        { id: 'dark', name: '어둠', emoji: '🌑', color: '#2c3e50', desc: '시야 제한' }
     ];
 
     const config = [
@@ -105,7 +107,7 @@
             btn.style.backgroundColor = m.color;
             if(m.id === 'pacman') btn.style.color = 'black';
             btn.onclick = () => setMode(m.id);
-            btn.innerHTML = `<span class="mode-emoji">${m.emoji}</span>${m.name} 모드<span>${m.desc}</span><div class="best-record">⏱ ${best}${best!=='없음'?'s':''}</div>`;
+            btn.innerHTML = `<span style="font-size:1.4rem; margin-right:8px;">${m.emoji}</span>${m.name} 모드<span>${m.desc}</span><div class="best-record">⏱ ${best}${best!=='없음'?'s':''}</div>`;
             menu.appendChild(btn);
         });
     }
@@ -117,7 +119,6 @@
         document.getElementById('menuScreen').style.display = 'none';
         document.getElementById('modeTitle').innerText = m.name.toUpperCase();
         document.getElementById('modeHeaderEmoji').innerText = m.emoji;
-        
         round = (modeId === 'pacman' || modeId === 'dark') ? 3 : 1;
         player.lives = (modeId === 'pacman' || modeId === 'dark') ? 1 : 3;
         startTime = Date.now();
@@ -181,11 +182,23 @@
             if (secretTimer >= 600) { spawnSecretNote(); secretNoteSpawned = true; document.getElementById('secretTimerUI').style.display = 'none'; }
         }
         updateBoosters();
+        updateUI();
+
         enemies.forEach((e, i) => {
             if (activeBoosters.stun <= 0) {
                 if (isFinalChase && !chaseCanMove) return;
                 e.moveTick++;
-                let interval = (gameMode === 'speed') ? (isAlpacaRound ? 1.2 : 4) : (gameMode === 'revenge' ? 3 : (gameMode === 'dark' ? 5 : 4));
+                
+                let interval;
+                if (isAlpacaRound || isFinalChase) {
+                    // 랄파카 라운드: 기본 0.2초, 스피드 0.06초
+                    interval = (gameMode === 'speed') ? 0.6 : 2; 
+                } else {
+                    // 일반 라운드: 0.6s(6) 시작, 열쇠당 -0.04s(0.4), 최소 0.25s(2.5)
+                    interval = Math.max(2.5, 6 - (player.keys * 0.4));
+                    if (gameMode === 'dark') interval = 5;
+                }
+
                 if (e.moveTick >= interval) {
                     let d = Math.sqrt((e.x-player.x)**2 + (e.y-player.y)**2);
                     let isAggro = (i === 0) || (d < 7) || isFinalChase;
@@ -197,12 +210,21 @@
                         const next = getNextStep(e.x, e.y, e.target.x, e.target.y);
                         if (next) { e.x = next.x; e.y = next.y; } else e.target = null;
                     }
-                    if (Math.round(e.x) === player.x && Math.round(e.y) === player.y && activeBoosters.ghost <= 0 && !player.hidden && activeBoosters.stun <= 0) hit();
+                    if (Math.round(e.x) === player.x && Math.round(e.y) === player.y && activeBoosters.ghost <= 0 && !player.hidden) hit();
                     e.moveTick = 0;
                 }
             }
         });
         draw();
+    }
+
+    function updateUI() {
+        const effectBox = document.getElementById('activeEffects');
+        effectBox.innerHTML = '';
+        if(activeBoosters.speed > 0) effectBox.innerHTML += `<span class="effect-badge" style="background:#2ecc71">👞 ${Math.ceil(activeBoosters.speed/10)}s</span>`;
+        if(activeBoosters.stun > 0) effectBox.innerHTML += `<span class="effect-badge" style="background:#9b59b6">🌀 ${Math.ceil(activeBoosters.stun/10)}s</span>`;
+        if(activeBoosters.ghost > 0) effectBox.innerHTML += `<span class="effect-badge" style="background:#1abc9c">👻 ${Math.ceil(activeBoosters.ghost/10)}s</span>`;
+        document.getElementById('roundNum').innerText = isAlpacaRound ? "SECRET" : round;
     }
 
     function draw() {
@@ -213,24 +235,24 @@
                 ctx.fillStyle = t === 1 ? '#34495e' : '#ecf0f1';
                 ctx.fillRect(c*tileSize, r*tileSize, tileSize, tileSize);
                 if (t === 2) drawIcon(c, r, 'gold');
-                if (t >= 3 && t <= 6) drawIcon(c, r, t===3?'#2ecc71':t===4?'#9b59b6':t===5?'#e67e22':'#1abc9c');
+                if (t === 3) drawIcon(c, r, '#2ecc71');
+                if (t === 4) drawIcon(c, r, '#9b59b6');
+                if (t === 5) drawIcon(c, r, '#e67e22');
+                if (t === 6) drawIcon(c, r, '#1abc9c');
                 if (t === 7) drawIcon(c, r, 'rgba(150,150,150,0.5)', true);
                 if (t === 8) drawIcon(c, r, 'white');
                 if (t === 9 || t === 99) { ctx.fillStyle = (player.keys >= player.targetKeys || isFinalChase) ? '#ff00ff' : '#95a5a6'; ctx.fillRect(c*tileSize+2, r*tileSize+2, tileSize-4, tileSize-4); }
             }
         }
-        
         ctx.save();
         if(activeBoosters.ghost > 0) ctx.globalAlpha = 0.4;
         ctx.fillStyle = '#3498db'; ctx.beginPath(); ctx.arc(player.x*tileSize+tileSize/2, player.y*tileSize+tileSize/2, tileSize/3, 0, Math.PI*2); ctx.fill();
         ctx.restore();
-
         enemies.forEach((e, i) => {
             let d = Math.sqrt((e.x-player.x)**2 + (e.y-player.y)**2);
             ctx.fillStyle = activeBoosters.stun > 0 ? '#bdc3c7' : ((i===0 || d < 7 || isFinalChase) ? '#e74c3c' : '#ff7675');
             ctx.fillRect(e.x*tileSize+2, e.y*tileSize+2, tileSize-4, tileSize-4);
         });
-
         if (gameMode === 'dark') {
             ctx.save(); ctx.globalCompositeOperation = 'destination-in';
             let grad = ctx.createRadialGradient(player.x*tileSize+tileSize/2, player.y*tileSize+tileSize/2, 0, player.x*tileSize+tileSize/2, player.y*tileSize+tileSize/2, tileSize*6);
@@ -246,24 +268,42 @@
 
     function move(dir) {
         if (!isRunning) return;
-        let nx = player.x, ny = player.y;
-        if(dir === 'up') ny--; if(dir === 'down') ny++; if(dir === 'left') nx--; if(dir === 'right') nx++;
-        if(nx>=0 && nx<cols && ny>=0 && ny<rows && maze[ny][nx] !== 1) { player.x = nx; player.y = ny; checkTile(); }
+        let moves = activeBoosters.speed > 0 ? 2 : 1;
+        for(let i=0; i<moves; i++) {
+            let nx = player.x, ny = player.y;
+            if(dir === 'up') ny--; if(dir === 'down') ny++; if(dir === 'left') nx--; if(dir === 'right') nx++;
+            if(nx>=0 && nx<cols && ny>=0 && ny<rows && maze[ny][nx] !== 1) { 
+                player.x = nx; player.y = ny; 
+                if(checkTile()) break;
+            }
+        }
         draw();
     }
 
     function checkTile() {
         let t = maze[player.y][player.x];
         player.hidden = (t === 7);
-        if (t === 2) { player.keys++; maze[player.y][player.x] = 0; document.getElementById('keys').innerText = player.keys; }
+        if (t === 2) { player.keys++; maze[player.y][player.x] = 0; document.getElementById('keys').innerText = player.keys; return true; }
         if (t >= 3 && t <= 6) {
             let dur = gameMode === 'speed' ? 40 : 80;
-            if(t===3) activeBoosters.speed = dur; if(t===4) activeBoosters.stun = dur; if(t===6) activeBoosters.ghost = dur;
+            if(t===3) activeBoosters.speed = dur;
+            if(t===4) activeBoosters.stun = dur;
+            if(t===5) teleportPlayer();
+            if(t===6) activeBoosters.ghost = dur;
             maze[player.y][player.x] = 0;
+            return true;
         }
-        if (t === 8) { maze[player.y][player.x] = 0; isAlpacaRound = true; initRound(); }
+        if (t === 8) { maze[player.y][player.x] = 0; isAlpacaRound = true; initRound(); return true; }
         if (t === 9 && player.keys >= player.targetKeys) winRound();
         if (t === 99) { isRunning = false; document.getElementById('hiddenEndingScreen').style.display = 'flex'; }
+        return false;
+    }
+
+    function teleportPlayer() {
+        let tx, ty;
+        do { tx = Math.floor(Math.random()*cols); ty = Math.floor(Math.random()*rows); } 
+        while(maze[ty][tx] === 1 || (Math.abs(tx-enemies[0].x) < 5));
+        player.x = tx; player.y = ty;
     }
 
     function updateBoosters() {
@@ -274,7 +314,12 @@
 
     function hit() {
         if (isFinalChase) { isRunning = false; alert("잡혔습니다!"); startFinalChase(); return; }
-        player.lives--; document.getElementById('lives').innerText = player.lives;
+        player.lives--; 
+        // 페널티: 모든 열쇠 및 부스트 초기화 (클래식 룰)
+        player.keys = 0;
+        activeBoosters = { speed: 0, stun: 0, ghost: 0 };
+        document.getElementById('keys').innerText = 0;
+        document.getElementById('lives').innerText = player.lives;
         if (player.lives <= 0) { alert("Game Over!"); location.reload(); }
         else { player.x = 1; player.y = 1; enemies.forEach(e => {e.x = cols-2; e.y = 1;}); }
     }
@@ -282,9 +327,8 @@
     function winRound() {
         isRunning = false;
         if (isAlpacaRound) { startFinalChase(); }
-        else if (round >= 3 || gameMode === 'pacman' || gameMode === 'dark') { 
-            showFinalEnd();
-        } else { 
+        else if (round >= 3 || gameMode === 'pacman' || gameMode === 'dark') { showFinalEnd(); }
+        else { 
             document.getElementById('msgScreen').style.display = 'flex';
             document.getElementById('roundAdvice').innerText = config[round-1].advice;
         }
@@ -307,8 +351,8 @@
     function initRound() {
         const cfg = config[round-1] || config[0];
         player.x = 1; player.y = 1; player.keys = 0; secretTimer = 0; secretNoteSpawned = false;
-        document.getElementById('lives').innerText = player.lives;
         document.getElementById('keys').innerText = 0;
+        document.getElementById('lives').innerText = player.lives;
         generateMaze(cfg.size);
         tileSize = Math.floor(window.innerHeight * 0.42 / cfg.size);
         canvas.width = tileSize * cfg.size; canvas.height = tileSize * cfg.size;
